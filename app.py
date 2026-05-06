@@ -364,20 +364,26 @@ if show_bicubic:
 if show_lite:
     t0 = time.perf_counter()
     lite_out = srgan_infer(model_lite, device_lite, lr_bgr)
-    # Advanced Detail Popping & Natural Smoothing
-    # detailEnhance makes hair, eyes, and clothing textures pop significantly
-    lite_out = cv2.detailEnhance(lite_out, sigma_s=10, sigma_r=0.15)
-    # Tighter Bilateral filter (d=3, sigma=15) to keep skin natural while details are sharp
-    lite_out = cv2.bilateralFilter(lite_out, d=3, sigmaColor=15, sigmaSpace=15)
+    bic_tmp = bicubic_infer(lr_bgr)
+    # 1. Network Interpolation (Blend 60% GAN + 40% Bicubic)
+    # This is the industry-standard way to kill GAN artifacts while keeping sharpness
+    lite_out = cv2.addWeighted(lite_out, 0.6, bic_tmp, 0.4, 0)
+    # 2. Softer Detail Enhancement (much more natural)
+    blur = cv2.GaussianBlur(lite_out, (0, 0), 2.0)
+    lite_out = cv2.addWeighted(lite_out, 1.4, blur, -0.4, 0)
+    # 3. Final polish to keep skin and sky smooth
+    lite_out = cv2.bilateralFilter(lite_out, d=5, sigmaColor=20, sigmaSpace=20)
     lite_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Lite\n(8 RCBs)"] = {"image": lite_out, "time_ms": round(lite_ms, 1)}
 
 if show_full:
     t0 = time.perf_counter()
     full_out = srgan_infer(model_full, device_full, lr_bgr)
-    # Applying same detail enhancement pipeline
-    full_out = cv2.detailEnhance(full_out, sigma_s=10, sigma_r=0.15)
-    full_out = cv2.bilateralFilter(full_out, d=3, sigmaColor=15, sigmaSpace=15)
+    bic_tmp = bicubic_infer(lr_bgr)
+    full_out = cv2.addWeighted(full_out, 0.6, bic_tmp, 0.4, 0)
+    blur = cv2.GaussianBlur(full_out, (0, 0), 2.0)
+    full_out = cv2.addWeighted(full_out, 1.4, blur, -0.4, 0)
+    full_out = cv2.bilateralFilter(full_out, d=5, sigmaColor=20, sigmaSpace=20)
     full_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Full\n(16 RCBs)"] = {"image": full_out, "time_ms": round(full_ms, 1)}
 
