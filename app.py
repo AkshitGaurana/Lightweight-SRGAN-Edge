@@ -364,17 +364,20 @@ if show_bicubic:
 if show_lite:
     t0 = time.perf_counter()
     lite_out = srgan_infer(model_lite, device_lite, lr_bgr)
-    # Subtle Bilateral Filter to smooth out 'weird' GAN artifacts on skin/natural textures
-    # d=3 is very mild, preserving all major edges while killing high-frequency jitter
-    lite_out = cv2.bilateralFilter(lite_out, d=3, sigmaColor=20, sigmaSpace=20)
+    # Advanced Detail Popping & Natural Smoothing
+    # detailEnhance makes hair, eyes, and clothing textures pop significantly
+    lite_out = cv2.detailEnhance(lite_out, sigma_s=10, sigma_r=0.15)
+    # Tighter Bilateral filter (d=3, sigma=15) to keep skin natural while details are sharp
+    lite_out = cv2.bilateralFilter(lite_out, d=3, sigmaColor=15, sigmaSpace=15)
     lite_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Lite\n(8 RCBs)"] = {"image": lite_out, "time_ms": round(lite_ms, 1)}
 
 if show_full:
     t0 = time.perf_counter()
     full_out = srgan_infer(model_full, device_full, lr_bgr)
-    # Applying same subtle smoothing for full model
-    full_out = cv2.bilateralFilter(full_out, d=3, sigmaColor=20, sigmaSpace=20)
+    # Applying same detail enhancement pipeline
+    full_out = cv2.detailEnhance(full_out, sigma_s=10, sigma_r=0.15)
+    full_out = cv2.bilateralFilter(full_out, d=3, sigmaColor=15, sigmaSpace=15)
     full_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Full\n(16 RCBs)"] = {"image": full_out, "time_ms": round(full_ms, 1)}
 
