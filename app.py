@@ -364,6 +364,8 @@ if show_bicubic:
 if show_lite:
     t0 = time.perf_counter()
     lite_out = srgan_infer(model_lite, device_lite, lr_bgr)
+    # Neutralize checkerboard (grid) artifacts with a micro-Gaussian blur
+    lite_out = cv2.GaussianBlur(lite_out, (0, 0), 0.5)
     bic_tmp = bicubic_infer(lr_bgr)
     # 1. Professional Network Interpolation (Stability Blend)
     lite_out = cv2.addWeighted(lite_out, 0.55, bic_tmp, 0.45, 0)
@@ -385,6 +387,8 @@ if show_lite:
 if show_full:
     t0 = time.perf_counter()
     full_out = srgan_infer(model_full, device_full, lr_bgr)
+    # Neutralize checkerboard (grid) artifacts
+    full_out = cv2.GaussianBlur(full_out, (0, 0), 0.5)
     bic_tmp = bicubic_infer(lr_bgr)
     full_out = cv2.addWeighted(full_out, 0.55, bic_tmp, 0.45, 0)
     lab_f = cv2.cvtColor(full_out, cv2.COLOR_BGR2LAB)
