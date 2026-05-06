@@ -145,6 +145,48 @@ hr { border-color: rgba(99, 179, 237, 0.1) !important; }
     color: #fbd38d;
     margin: 12px 0;
 }
+
+/* Copilot Style Loader */
+.copilot-loader-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 0;
+}
+.copilot-loader {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, #63b3ed, #68d391, #a78bfa, #63b3ed);
+    animation: spin 1.5s linear infinite;
+    box-shadow: 0 0 30px rgba(167, 139, 250, 0.6);
+    position: relative;
+}
+.copilot-loader::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    background: #0f1729;
+    border-radius: 50%;
+}
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+.copilot-text {
+    margin-top: 20px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    background: linear-gradient(90deg, #63b3ed, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
 /* Image Hover Zoom Effect */
 div[data-testid="stImage"] {
     overflow: visible !important;
@@ -331,55 +373,62 @@ st.markdown(f"**Input:** `{w}×{h}` px  →  LR simulated at `{lw}×{lh}` px  �
 results = {}   # method -> {"image": bgr_ndarray, "time_ms": float}
 metrics_data = []
 
-with st.spinner("Running super-resolution..."):
+loading_ph = st.empty()
+loading_ph.markdown('''
+    <div class="copilot-loader-container">
+        <div class="copilot-loader"></div>
+        <div class="copilot-text">Synthesizing Pixels...</div>
+    </div>
+''', unsafe_allow_html=True)
 
-    if show_bicubic:
-        t0 = time.perf_counter()
-        bic_out = bicubic_infer(lr_bgr)
-        bic_ms = (time.perf_counter() - t0) * 1000
-        results["Bicubic"] = {"image": bic_out, "time_ms": round(bic_ms, 1)}
+if show_bicubic:
+    t0 = time.perf_counter()
+    bic_out = bicubic_infer(lr_bgr)
+    bic_ms = (time.perf_counter() - t0) * 1000
+    results["Bicubic"] = {"image": bic_out, "time_ms": round(bic_ms, 1)}
 
-    if show_lite:
-        t0 = time.perf_counter()
-        lite_out = srgan_infer(model_lite, device_lite, lr_bgr)
-        if optimize_text:
-            bic_tmp = bicubic_infer(lr_bgr)
-            # Heavily favor bicubic to kill GAN hallucinations on text
-            blended = cv2.addWeighted(lite_out, 0.25, bic_tmp, 0.75, 0)
-            # Apply Unsharp Masking to make the text crisp and flawless
-            blur = cv2.GaussianBlur(blended, (0, 0), 2.0)
-            lite_out = cv2.addWeighted(blended, 1.75, blur, -0.75, 0)
-        lite_ms = (time.perf_counter() - t0) * 1000
-        results["SRGAN-Lite\n(8 RCBs)"] = {"image": lite_out, "time_ms": round(lite_ms, 1)}
+if show_lite:
+    t0 = time.perf_counter()
+    lite_out = srgan_infer(model_lite, device_lite, lr_bgr)
+    if optimize_text:
+        bic_tmp = bicubic_infer(lr_bgr)
+        blended = cv2.addWeighted(lite_out, 0.20, bic_tmp, 0.80, 0)
+        # Ultra-aggressive sharpening for flawless text
+        blur = cv2.GaussianBlur(blended, (0, 0), 2.5)
+        lite_out = cv2.addWeighted(blended, 2.2, blur, -1.2, 0)
+    lite_ms = (time.perf_counter() - t0) * 1000
+    results["SRGAN-Lite\n(8 RCBs)"] = {"image": lite_out, "time_ms": round(lite_ms, 1)}
 
-    if show_full:
-        t0 = time.perf_counter()
-        full_out = srgan_infer(model_full, device_full, lr_bgr)
-        if optimize_text:
-            bic_tmp = bicubic_infer(lr_bgr)
-            blended = cv2.addWeighted(full_out, 0.25, bic_tmp, 0.75, 0)
-            blur = cv2.GaussianBlur(blended, (0, 0), 2.0)
-            full_out = cv2.addWeighted(blended, 1.75, blur, -0.75, 0)
-        full_ms = (time.perf_counter() - t0) * 1000
-        results["SRGAN-Full\n(16 RCBs)"] = {"image": full_out, "time_ms": round(full_ms, 1)}
+if show_full:
+    t0 = time.perf_counter()
+    full_out = srgan_infer(model_full, device_full, lr_bgr)
+    if optimize_text:
+        bic_tmp = bicubic_infer(lr_bgr)
+        blended = cv2.addWeighted(full_out, 0.20, bic_tmp, 0.80, 0)
+        blur = cv2.GaussianBlur(blended, (0, 0), 2.5)
+        full_out = cv2.addWeighted(blended, 2.2, blur, -1.2, 0)
+    full_ms = (time.perf_counter() - t0) * 1000
+    results["SRGAN-Full\n(16 RCBs)"] = {"image": full_out, "time_ms": round(full_ms, 1)}
 
-    if run_metrics and results:
-        # Crop HR to same size as SR output for fair comparison
-        for label, data in results.items():
-            sr = data["image"]
-            sh, sw = sr.shape[:2]
-            ch, cw = min(h * 4, sh), min(w * 4, sw)
-            hr_rs = cv2.resize(hr_bgr, (sw, sh), interpolation=cv2.INTER_CUBIC)
-            hr_crop = hr_rs[:ch, :cw]
-            sr_crop = sr[:ch, :cw]
-            psnr = compute_psnr(hr_crop, sr_crop)
-            ssim = compute_ssim(hr_crop, sr_crop)
-            metrics_data.append({
-                "Method":        label.replace("\n", " "),
-                "PSNR (dB)":     round(psnr, 2),
-                "SSIM":          round(ssim, 4),
-                "Inference (ms)": data["time_ms"],
-            })
+loading_ph.empty()
+
+if run_metrics and results:
+    # Crop HR to same size as SR output for fair comparison
+    for label, data in results.items():
+        sr = data["image"]
+        sh, sw = sr.shape[:2]
+        ch, cw = min(h * 4, sh), min(w * 4, sw)
+        hr_rs = cv2.resize(hr_bgr, (sw, sh), interpolation=cv2.INTER_CUBIC)
+        hr_crop = hr_rs[:ch, :cw]
+        sr_crop = sr[:ch, :cw]
+        psnr = compute_psnr(hr_crop, sr_crop)
+        ssim = compute_ssim(hr_crop, sr_crop)
+        metrics_data.append({
+            "Method":        label.replace("\n", " "),
+            "PSNR (dB)":     round(psnr, 2),
+            "SSIM":          round(ssim, 4),
+            "Inference (ms)": data["time_ms"],
+        })
 
 # ===========================================================================
 # Display images
