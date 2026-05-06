@@ -170,10 +170,11 @@ hr { border-color: rgba(99, 179, 237, 0.1) !important; }
     background: #0f1729;
     border-radius: 50%;
 }
-/* Image Click-to-Enlarge Hint */
-div[data-testid="stImage"] img {
-    cursor: pointer;
-    border-radius: 8px;
+/* Enlarge Expand Button */
+button[aria-label="Enlarge image"] {
+    transform: scale(2.5) !important;
+    background: rgba(0,0,0,0.5) !important;
+    border-radius: 5px !important;
 }
 
 </style>
@@ -363,35 +364,14 @@ if show_bicubic:
 if show_lite:
     t0 = time.perf_counter()
     lite_out = srgan_infer(model_lite, device_lite, lr_bgr)
-    if optimize_text:
-        bic_tmp = bicubic_infer(lr_bgr)
-        # 1. Blend to stabilize GAN hallucination
-        lite_out = cv2.addWeighted(lite_out, 0.2, bic_tmp, 0.8, 0)
-        # 2. Local Contrast Enhancement (CLAHE) - Makes text deep black and background pure white
-        lab = cv2.cvtColor(lite_out, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        l = clahe.apply(l)
-        lite_out = cv2.cvtColor(cv2.merge((l,a,b)), cv2.COLOR_LAB2BGR)
-        # 3. High-Frequency Laplacian Sharpening for tiny text
-        lap = cv2.Laplacian(lite_out, cv2.CV_64F)
-        lite_out = cv2.convertScaleAbs(lite_out - 0.4 * lap)
+    # Reverted text optimization to pure SRGAN output
     lite_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Lite\n(8 RCBs)"] = {"image": lite_out, "time_ms": round(lite_ms, 1)}
 
 if show_full:
     t0 = time.perf_counter()
     full_out = srgan_infer(model_full, device_full, lr_bgr)
-    if optimize_text:
-        bic_tmp = bicubic_infer(lr_bgr)
-        full_out = cv2.addWeighted(full_out, 0.2, bic_tmp, 0.8, 0)
-        lab = cv2.cvtColor(full_out, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        l = clahe.apply(l)
-        full_out = cv2.cvtColor(cv2.merge((l,a,b)), cv2.COLOR_LAB2BGR)
-        lap = cv2.Laplacian(full_out, cv2.CV_64F)
-        full_out = cv2.convertScaleAbs(full_out - 0.4 * lap)
+    # Reverted text optimization to pure SRGAN output
     full_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Full\n(16 RCBs)"] = {"image": full_out, "time_ms": round(full_ms, 1)}
 
