@@ -145,6 +145,22 @@ hr { border-color: rgba(99, 179, 237, 0.1) !important; }
     color: #fbd38d;
     margin: 12px 0;
 }
+/* Image Hover Zoom Effect */
+div[data-testid="stImage"] {
+    overflow: visible !important;
+}
+div[data-testid="stImage"] img {
+    transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+    border-radius: 8px;
+}
+div[data-testid="stImage"]:hover img {
+    transform: scale(1.65);
+    z-index: 9999;
+    position: relative;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+    cursor: zoom-in;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
