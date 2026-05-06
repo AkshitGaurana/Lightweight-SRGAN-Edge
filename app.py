@@ -344,8 +344,11 @@ with st.spinner("Running super-resolution..."):
         lite_out = srgan_infer(model_lite, device_lite, lr_bgr)
         if optimize_text:
             bic_tmp = bicubic_infer(lr_bgr)
-            lite_out = cv2.addWeighted(lite_out, 0.65, bic_tmp, 0.35, 0)
-            lite_out = cv2.bilateralFilter(lite_out, d=5, sigmaColor=35, sigmaSpace=35)
+            # Heavily favor bicubic to kill GAN hallucinations on text
+            blended = cv2.addWeighted(lite_out, 0.25, bic_tmp, 0.75, 0)
+            # Apply Unsharp Masking to make the text crisp and flawless
+            blur = cv2.GaussianBlur(blended, (0, 0), 2.0)
+            lite_out = cv2.addWeighted(blended, 1.75, blur, -0.75, 0)
         lite_ms = (time.perf_counter() - t0) * 1000
         results["SRGAN-Lite\n(8 RCBs)"] = {"image": lite_out, "time_ms": round(lite_ms, 1)}
 
@@ -354,8 +357,9 @@ with st.spinner("Running super-resolution..."):
         full_out = srgan_infer(model_full, device_full, lr_bgr)
         if optimize_text:
             bic_tmp = bicubic_infer(lr_bgr)
-            full_out = cv2.addWeighted(full_out, 0.65, bic_tmp, 0.35, 0)
-            full_out = cv2.bilateralFilter(full_out, d=5, sigmaColor=35, sigmaSpace=35)
+            blended = cv2.addWeighted(full_out, 0.25, bic_tmp, 0.75, 0)
+            blur = cv2.GaussianBlur(blended, (0, 0), 2.0)
+            full_out = cv2.addWeighted(blended, 1.75, blur, -0.75, 0)
         full_ms = (time.perf_counter() - t0) * 1000
         results["SRGAN-Full\n(16 RCBs)"] = {"image": full_out, "time_ms": round(full_ms, 1)}
 
