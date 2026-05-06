@@ -170,37 +170,10 @@ hr { border-color: rgba(99, 179, 237, 0.1) !important; }
     background: #0f1729;
     border-radius: 50%;
 }
-@keyframes spin {
-    100% { transform: rotate(360deg); }
-}
-.copilot-text {
-    margin-top: 20px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    background: linear-gradient(90deg, #63b3ed, #a78bfa);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: pulse 1.5s ease-in-out infinite;
-}
-@keyframes pulse {
-    0%, 100% { opacity: 0.6; }
-    50% { opacity: 1; }
-}
-
-/* Image Hover Zoom Effect */
-div[data-testid="stImage"] {
-    overflow: visible !important;
-}
+/* Image Click-to-Enlarge Hint */
 div[data-testid="stImage"] img {
-    transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+    cursor: pointer;
     border-radius: 8px;
-}
-div[data-testid="stImage"]:hover img {
-    transform: scale(1.65);
-    z-index: 9999;
-    position: relative;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.8);
-    cursor: zoom-in;
 }
 
 </style>
@@ -392,14 +365,17 @@ if show_lite:
     lite_out = srgan_infer(model_lite, device_lite, lr_bgr)
     if optimize_text:
         bic_tmp = bicubic_infer(lr_bgr)
-        # Reduce GAN influence to 15% to stop hallucinations on tiny text
-        blended = cv2.addWeighted(lite_out, 0.15, bic_tmp, 0.85, 0)
-        # Use a tighter Gaussian kernel (1.0) to capture microscopic text details
-        blur = cv2.GaussianBlur(blended, (0, 0), 1.0)
-        # Extreme sharpening amount (2.5x) for maximum legibility
-        lite_out = cv2.addWeighted(blended, 2.5, blur, -1.5, 0)
-        # Post-process with a mild bilateral filter to remove 'ringing' artifacts
-        lite_out = cv2.bilateralFilter(lite_out, 5, 25, 25)
+        # 1. Blend to stabilize GAN hallucination
+        lite_out = cv2.addWeighted(lite_out, 0.2, bic_tmp, 0.8, 0)
+        # 2. Local Contrast Enhancement (CLAHE) - Makes text deep black and background pure white
+        lab = cv2.cvtColor(lite_out, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        l = clahe.apply(l)
+        lite_out = cv2.cvtColor(cv2.merge((l,a,b)), cv2.COLOR_LAB2BGR)
+        # 3. High-Frequency Laplacian Sharpening for tiny text
+        lap = cv2.Laplacian(lite_out, cv2.CV_64F)
+        lite_out = cv2.convertScaleAbs(lite_out - 0.4 * lap)
     lite_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Lite\n(8 RCBs)"] = {"image": lite_out, "time_ms": round(lite_ms, 1)}
 
@@ -408,10 +384,14 @@ if show_full:
     full_out = srgan_infer(model_full, device_full, lr_bgr)
     if optimize_text:
         bic_tmp = bicubic_infer(lr_bgr)
-        blended = cv2.addWeighted(full_out, 0.15, bic_tmp, 0.85, 0)
-        blur = cv2.GaussianBlur(blended, (0, 0), 1.0)
-        full_out = cv2.addWeighted(blended, 2.5, blur, -1.5, 0)
-        full_out = cv2.bilateralFilter(full_out, 5, 25, 25)
+        full_out = cv2.addWeighted(full_out, 0.2, bic_tmp, 0.8, 0)
+        lab = cv2.cvtColor(full_out, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        l = clahe.apply(l)
+        full_out = cv2.cvtColor(cv2.merge((l,a,b)), cv2.COLOR_LAB2BGR)
+        lap = cv2.Laplacian(full_out, cv2.CV_64F)
+        full_out = cv2.convertScaleAbs(full_out - 0.4 * lap)
     full_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Full\n(16 RCBs)"] = {"image": full_out, "time_ms": round(full_ms, 1)}
 
