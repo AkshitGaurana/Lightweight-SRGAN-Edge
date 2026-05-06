@@ -222,9 +222,11 @@ with st.sidebar:
                                help="Classical OpenCV bicubic 4× interpolation")
 
     st.markdown("---")
-    st.markdown("### Benchmark")
+    st.markdown("### Benchmark & Processing")
     run_metrics = st.checkbox("Compute PSNR / SSIM", value=True,
                               help="Uses the input as HR ground truth, downscales 4x, then SR back up")
+    optimize_text = st.checkbox("Optimize for Text / Documents", value=True,
+                                help="Reduces GAN hallucination artifacts around letters and flat backgrounds")
 
     st.markdown("---")
     st.markdown(
@@ -324,12 +326,20 @@ with st.spinner("Running super-resolution..."):
     if show_lite:
         t0 = time.perf_counter()
         lite_out = srgan_infer(model_lite, device_lite, lr_bgr)
+        if optimize_text:
+            bic_tmp = bicubic_infer(lr_bgr)
+            lite_out = cv2.addWeighted(lite_out, 0.65, bic_tmp, 0.35, 0)
+            lite_out = cv2.bilateralFilter(lite_out, d=5, sigmaColor=35, sigmaSpace=35)
         lite_ms = (time.perf_counter() - t0) * 1000
         results["SRGAN-Lite\n(8 RCBs)"] = {"image": lite_out, "time_ms": round(lite_ms, 1)}
 
     if show_full:
         t0 = time.perf_counter()
         full_out = srgan_infer(model_full, device_full, lr_bgr)
+        if optimize_text:
+            bic_tmp = bicubic_infer(lr_bgr)
+            full_out = cv2.addWeighted(full_out, 0.65, bic_tmp, 0.35, 0)
+            full_out = cv2.bilateralFilter(full_out, d=5, sigmaColor=35, sigmaSpace=35)
         full_ms = (time.perf_counter() - t0) * 1000
         results["SRGAN-Full\n(16 RCBs)"] = {"image": full_out, "time_ms": round(full_ms, 1)}
 
