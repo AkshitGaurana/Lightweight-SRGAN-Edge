@@ -392,10 +392,14 @@ if show_lite:
     lite_out = srgan_infer(model_lite, device_lite, lr_bgr)
     if optimize_text:
         bic_tmp = bicubic_infer(lr_bgr)
-        blended = cv2.addWeighted(lite_out, 0.20, bic_tmp, 0.80, 0)
-        # Ultra-aggressive sharpening for flawless text
-        blur = cv2.GaussianBlur(blended, (0, 0), 2.5)
-        lite_out = cv2.addWeighted(blended, 2.2, blur, -1.2, 0)
+        # Reduce GAN influence to 15% to stop hallucinations on tiny text
+        blended = cv2.addWeighted(lite_out, 0.15, bic_tmp, 0.85, 0)
+        # Use a tighter Gaussian kernel (1.0) to capture microscopic text details
+        blur = cv2.GaussianBlur(blended, (0, 0), 1.0)
+        # Extreme sharpening amount (2.5x) for maximum legibility
+        lite_out = cv2.addWeighted(blended, 2.5, blur, -1.5, 0)
+        # Post-process with a mild bilateral filter to remove 'ringing' artifacts
+        lite_out = cv2.bilateralFilter(lite_out, 5, 25, 25)
     lite_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Lite\n(8 RCBs)"] = {"image": lite_out, "time_ms": round(lite_ms, 1)}
 
@@ -404,9 +408,10 @@ if show_full:
     full_out = srgan_infer(model_full, device_full, lr_bgr)
     if optimize_text:
         bic_tmp = bicubic_infer(lr_bgr)
-        blended = cv2.addWeighted(full_out, 0.20, bic_tmp, 0.80, 0)
-        blur = cv2.GaussianBlur(blended, (0, 0), 2.5)
-        full_out = cv2.addWeighted(blended, 2.2, blur, -1.2, 0)
+        blended = cv2.addWeighted(full_out, 0.15, bic_tmp, 0.85, 0)
+        blur = cv2.GaussianBlur(blended, (0, 0), 1.0)
+        full_out = cv2.addWeighted(blended, 2.5, blur, -1.5, 0)
+        full_out = cv2.bilateralFilter(full_out, 5, 25, 25)
     full_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Full\n(16 RCBs)"] = {"image": full_out, "time_ms": round(full_ms, 1)}
 
