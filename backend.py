@@ -194,9 +194,17 @@ def _load_weights(model: nn.Module, weights_path: str, device: torch.device) -> 
     checkpoint, shape mismatch, etc.). The model is left with random weights
     on failure -- the caller decides what to do next.
     """
-    if not os.path.isfile(weights_path):
-        print(f"[backend] WARNING -- Weights file not found: {weights_path}")
-        return False
+    if not os.path.isfile(weights_path) or os.path.getsize(weights_path) < 1024:
+        print(f"[backend] Weights file missing or invalid: {weights_path}. Downloading...")
+        try:
+            import urllib.request
+            url = "https://huggingface.co/ChangyuLiu/SRGAN-PyTorch/resolve/main/SRGAN_x4-ImageNet.pth.tar"
+            os.makedirs(os.path.dirname(weights_path), exist_ok=True)
+            urllib.request.urlretrieve(url, weights_path)
+            print("[backend] Download complete.")
+        except Exception as e:
+            print(f"[backend] WARNING -- Failed to download weights: {e}")
+            return False
 
     try:
         checkpoint = torch.load(
