@@ -365,14 +365,20 @@ if show_lite:
     t0 = time.perf_counter()
     lite_out = srgan_infer(model_lite, device_lite, lr_bgr)
     bic_tmp = bicubic_infer(lr_bgr)
-    # 1. Network Interpolation (Blend 60% GAN + 40% Bicubic)
-    # This is the industry-standard way to kill GAN artifacts while keeping sharpness
-    lite_out = cv2.addWeighted(lite_out, 0.6, bic_tmp, 0.4, 0)
-    # 2. Softer Detail Enhancement (much more natural)
-    blur = cv2.GaussianBlur(lite_out, (0, 0), 2.0)
-    lite_out = cv2.addWeighted(lite_out, 1.4, blur, -0.4, 0)
-    # 3. Final polish to keep skin and sky smooth
-    lite_out = cv2.bilateralFilter(lite_out, d=5, sigmaColor=20, sigmaSpace=20)
+    # 1. Professional Network Interpolation (Stability Blend)
+    lite_out = cv2.addWeighted(lite_out, 0.55, bic_tmp, 0.45, 0)
+    # 2. Professional DSLR Pipeline (LAB Color Space)
+    lab = cv2.cvtColor(lite_out, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    # Subtly enhance local contrast for DSLR dynamic range
+    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8,8))
+    l = clahe.apply(l)
+    # Sharpen only the L-channel (Luminance) to avoid 'weird' color artifacts
+    blur_l = cv2.GaussianBlur(l, (0, 0), 1.0)
+    l = cv2.addWeighted(l, 1.5, blur_l, -0.5, 0)
+    lite_out = cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
+    # 3. Final Denoising for smooth sky/skin
+    lite_out = cv2.bilateralFilter(lite_out, d=5, sigmaColor=15, sigmaSpace=15)
     lite_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Lite\n(8 RCBs)"] = {"image": lite_out, "time_ms": round(lite_ms, 1)}
 
@@ -380,10 +386,14 @@ if show_full:
     t0 = time.perf_counter()
     full_out = srgan_infer(model_full, device_full, lr_bgr)
     bic_tmp = bicubic_infer(lr_bgr)
-    full_out = cv2.addWeighted(full_out, 0.6, bic_tmp, 0.4, 0)
-    blur = cv2.GaussianBlur(full_out, (0, 0), 2.0)
-    full_out = cv2.addWeighted(full_out, 1.4, blur, -0.4, 0)
-    full_out = cv2.bilateralFilter(full_out, d=5, sigmaColor=20, sigmaSpace=20)
+    full_out = cv2.addWeighted(full_out, 0.55, bic_tmp, 0.45, 0)
+    lab_f = cv2.cvtColor(full_out, cv2.COLOR_BGR2LAB)
+    lf, af, bf = cv2.split(lab_f)
+    lf = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8,8)).apply(lf)
+    blur_lf = cv2.GaussianBlur(lf, (0, 0), 1.0)
+    lf = cv2.addWeighted(lf, 1.5, blur_lf, -0.5, 0)
+    full_out = cv2.cvtColor(cv2.merge((lf, af, bf)), cv2.COLOR_LAB2BGR)
+    full_out = cv2.bilateralFilter(full_out, d=5, sigmaColor=15, sigmaSpace=15)
     full_ms = (time.perf_counter() - t0) * 1000
     results["SRGAN-Full\n(16 RCBs)"] = {"image": full_out, "time_ms": round(full_ms, 1)}
 
