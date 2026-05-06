@@ -109,7 +109,7 @@ class SRResNet(nn.Module):
             in_channels: int = 3,
             out_channels: int = 3,
             channels: int = 64,
-            num_rcb: int = 16,
+            num_rcb: int = 8,
             upscale: int = 4,
     ) -> None:
         super(SRResNet, self).__init__()
